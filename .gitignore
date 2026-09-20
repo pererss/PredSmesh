@@ -1,4 +1,5 @@
 .env
+railway_env.txt
 .venv/
 venv/
 env/
