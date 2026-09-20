@@ -470,4 +470,5 @@ reward_completed, broadcast, settings_change, message_user, category_change).
 Учебный starter-проект. Используйте и изменяйте свободно.
 #   P r e d S m e s h  
  #   P r e d S m e s h  
+ #   P r e d S m e s h  
  
