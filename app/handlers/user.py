@@ -10,8 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.handlers.start import render_main_menu_text
 from app.keyboards import MenuCB
-from app.keyboards.user import main_menu_keyboard
+from app.keyboards.admin import admin_contact_keyboard
+from app.keyboards.user import cancel_keyboard, main_menu_keyboard
+from app.services import users as users_service
+from app.services.notifications import notify_admin
+from app.states.ideas import ContactForm
 from app.utils.telegram import safe_edit
+from app.utils.text import CONTACT_PROMPT, author_display, escape_html, truncate
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,48 @@ async def cb_cancel(
         callback, await render_main_menu_text(session), main_menu_keyboard()
     )
     await callback.answer("Действие отменено")
+
+
+@router.callback_query(MenuCB.filter(F.action == "contact"))
+async def cb_contact(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext
+) -> None:
+    await state.set_state(ContactForm.waiting_for_text)
+    await safe_edit(callback, CONTACT_PROMPT, cancel_keyboard())
+    await callback.answer()
+
+
+@router.message(ContactForm.waiting_for_text, F.text)
+async def process_contact_text(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    if message.from_user is None:
+        return
+    text_value = (message.text or "").strip()
+    if len(text_value) < 5:
+        await message.answer("Сообщение слишком короткое. Опиши вопрос подробнее.")
+        return
+
+    user = await users_service.get_current_user(session, message.from_user)
+    await state.clear()
+    await message.answer(
+        "✅ Сообщение отправлено администрации. Ответ придёт сюда."
+    )
+    await notify_admin(
+        message.bot,
+        (
+            "📩 СООБЩЕНИЕ ОТ ПОЛЬЗОВАТЕЛЯ\n\n"
+            f"👤 {author_display(user)}\n"
+            f"🆔 {user.telegram_id}\n\n"
+            f"{escape_html(truncate(text_value, 3500))}"
+        ),
+        admin_contact_keyboard(user.id),
+    )
+
+
+@router.message(ContactForm.waiting_for_text)
+async def process_contact_non_text(message: Message) -> None:
+    await message.answer("Отправь сообщение текстом.")
 
 
 @router.message(Command("admin"))

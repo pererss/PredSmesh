@@ -87,6 +87,13 @@ async def list_all_paginated(
     return result.all()
 
 
+async def list_all_with_authors(session: AsyncSession) -> Sequence[Idea]:
+    result = await session.scalars(
+        select(Idea).order_by(Idea.public_number.asc())
+    )
+    return result.all()
+
+
 async def list_approved_paginated(
     session: AsyncSession, *, offset: int, limit: int, order_by_likes: bool = False
 ) -> Sequence[Idea]:

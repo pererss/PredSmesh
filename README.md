@@ -34,16 +34,23 @@
 Пользователь:
 
 - 💡 предложить идею (FSM, валидация 20–5000 символов);
-- 🔎 посмотреть каталог идей (новые / популярные / случайная, пагинация, лайки, просмотры);
-- 🏆 посмотреть идеи с наибольшим количеством лайков;
+- 👤 посмотреть свои предложения со статусами и открыть карточку идеи;
+- ✏️ отредактировать или 🗑 удалить своё предложение, пока оно на рассмотрении;
+- 📩 написать администрации (ответ приходит в этот же чат);
 - ❓ узнать, как всё работает;
-- 👤 посмотреть свои предложения со статусами;
 - 🎁 пригласить друзей по реферальной ссылке.
+
+🔒 Идеи видны только автору и администрации. Каталог, лайки и «лучшие идеи» доступны
+**только администратору** — обычный пользователь не может смотреть чужие идеи.
 
 Администратор (только Telegram ID `5434264152`):
 
 - 📥 очередь новых предложений (одобрить / наградить / отклонить с причиной / написать автору / скрыть / следующее);
-- 💡 все идеи и 🏆 лучшие идеи;
+- 💡 все идеи, 🏆 лучшие идеи (по лайкам), 👁 каталог идей (превью с лайками и просмотрами);
+- 🔍 поиск по номеру идеи, Telegram ID или @username;
+- 📤 экспорт всех идей в CSV (открывается в Excel);
+- ♻️ вернуть отклонённую/скрытую идею в очередь, 🗑 удалить идею навсегда;
+- 💬 написать любому пользователю, 🚫 блокировать/разблокировать пользователя;
 - 👥 пользователи со статистикой;
 - ⭐ награды (pending / manual / completed / failed), ручное подтверждение выплаты;
 - 📊 статистика за всё время и за сегодня;
@@ -345,39 +352,111 @@ Dockerfile: `python:3.11-slim`, установка `requirements.txt`, запу�
 
 ---
 
-## Деплой на Railway
+## Деплой на Railway (пошагово, куда что вставлять)
 
-1. Создайте новый Railway Project: https://railway.app/new
-2. Подключите GitHub repository с этим проектом
-   (**Deploy from GitHub repo** → выберите репозиторий).
-3. Railway сам найдёт `Dockerfile` и соберёт образ.
-4. Откройте сервис → вкладка **Variables** → **Raw Editor** и добавьте переменные:
+### Шаг 1. Создать проект
+
+1. Открой https://railway.app/new
+2. Нажми **Deploy from GitHub repo**
+3. Разреши Railway доступ к GitHub (кнопка **Configure GitHub App**), выбери репозиторий
+   `pererss/PredSmesh`.
+4. Railway создаст сервис и сразу начнёт сборку по `Dockerfile`. Первая сборка упадёт —
+   это нормально: не хватает переменных окружения (шаг 3).
+
+### Шаг 2. (если репозитория нет на GitHub)
+
+```bash
+git remote add origin https://github.com/ВАШ_ЛОГИН/PredSmesh.git
+git add -A
+git commit -m "Ideas bot"
+git push -u origin main
+```
+
+Либо вообще без GitHub — через Railway CLI (нужен Node.js):
+
+```bash
+npm i -g @railway/cli
+railway login
+railway init
+railway up
+```
+
+### Шаг 3. Добавить переменные окружения
+
+1. В Railway открой свой сервис.
+2. Перейди на вкладку **Variables**.
+3. Нажми **Raw Editor** (кнопка справа сверху).
+4. Вставь целиком следующий блок, заменив `СЮДА_ТОКЕН` и `СЮДА_ПАРОЛЬ`
+   на свои значения (они лежат в файле `.env` в корне проекта — открой Блокнотом):
 
 ```
-BOT_TOKEN=...
+BOT_TOKEN=СЮДА_ТОКЕН
 ADMIN_ID=5434264152
 SUPABASE_URL=https://rsfjsemjbwbuiyvbbvax.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_VaDR4FHHH80K0MrV1f0ghA_341IGkoA
-DATABASE_URL=postgresql://postgres.rsfjsemjbwbuiyvbbvax:ВАШ_ПАРОЛЬ@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres.rsfjsemjbwbuiyvbbvax:ВАШ_ПАРОЛЬ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.rsfjsemjbwbuiyvbbvax:СЮДА_ПАРОЛЬ@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres.rsfjsemjbwbuiyvbbvax:СЮДА_ПАРОЛЬ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
 REWARD_AMOUNT=15
 APP_ENV=production
 LOG_LEVEL=INFO
 ```
 
-5. **Start Command**: если Railway использует Dockerfile — ничего менять не нужно
-   (`CMD ["python", "-m", "app.bot"]`). Если деплой без Dockerfile, укажите:
+5. Нажми **Save** (или **Update Variables**). Railway автоматически перезапустит сервис.
+
+> `TELEGRAM_PROXY` на Railway добавлять НЕ нужно: у серверов Railway доступ к Telegram
+> есть напрямую. Эта переменная нужна только для локального запуска, если твой интернет
+> блокирует Telegram.
+
+### Шаг 4. Проверить сборку и запуск
+
+1. Вкладка **Deployments** → последний деплой → **View Logs**.
+2. В логах должно быть:
+
+```
+Database engine created
+Database connection established
+Authorized as @predsmesh_bot (id=...)
+Run polling for bot @predsmesh_bot
+```
+
+3. Открой Telegram → свой бот → `/start` → бот должен ответить.
+4. `/admin` → админ-панель.
+
+### Шаг 5. Start Command
+
+Если Railway собирает через **Dockerfile** (в репозитории есть `Dockerfile`) — ничего
+менять не нужно, команда уже прописана в образе: `python -m app.bot`.
+
+Если деплой без Dockerfile: **Settings** → **Deploy** → **Custom Start Command**:
 
 ```
 python -m app.bot
 ```
 
-6. Нажмите **Deploy**. В логах должно появиться `Authorized as @your_bot (id=...)`.
-7. Таблицы создаются **один раз** через `supabase_schema.sql` (или `alembic upgrade head`
-   локально) — приложение само схему не меняет.
+### Шаг 6. Чтобы сервис не засыпал
 
-Railway засыпает? Для Telegram-бота включите постоянный режим (Settings → Restart Policy →
-On Failure) и не используйте sleep.
+Telegram-бот должен работать постоянно:
+**Settings** → **Restart Policy** → выбери **On Failure** (или Always).
+Порт открывать не нужно — бот работает на long polling.
+
+### Обновление после правок кода
+
+```bash
+git add -A
+git commit -m "update"
+git push
+```
+
+Railway сам увидит новый коммит и пересоберёт сервис.
+
+### Если что-то пошло не так
+
+- **`Database check failed`** — неверный пароль в `DATABASE_URL` или схема не создана
+  (выполни `supabase_schema.sql` в Supabase SQL Editor).
+- **`TelegramConflictError`** — где-то уже запущен второй экземпляр бота с этим токеном:
+  останови локальное окно с ботом или другой деплой.
+- **Сборка падает на `pip install`** — проверь, что `requirements.txt` закоммичен.
+- **Логи пустые** — открой **Deployments** → конкретный деплой → **Logs** (не общие логи проекта).
 
 ---
 

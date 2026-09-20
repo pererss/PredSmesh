@@ -9,6 +9,14 @@ class AdminMessageForm(StatesGroup):
     waiting_for_text = State()
 
 
+class AdminUserMessageForm(StatesGroup):
+    waiting_for_text = State()
+
+
+class AdminSearchForm(StatesGroup):
+    waiting_for_query = State()
+
+
 class BroadcastForm(StatesGroup):
     waiting_for_text = State()
     confirm = State()

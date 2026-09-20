@@ -6,35 +6,42 @@ from app.database.models import Category, Idea, IdeaStatus, Reward
 from app.keyboards import (
     AdminCB,
     CategoryToggleCB,
+    MenuCB,
     RejectApplyCB,
     cb_button,
 )
 from app.keyboards.pagination import pagination_buttons
-from app.utils.text import (
-    REJECT_REASONS,
-    STATUS_LABELS,
-    parse_bool,
-)
+from app.utils.text import REJECT_REASONS, STATUS_LABELS, parse_bool
 
 
-def admin_menu_keyboard() -> InlineKeyboardMarkup:
+def admin_menu_keyboard(pending_count: int = 0) -> InlineKeyboardMarkup:
+    pending_label = (
+        f"📥 Новые предложения ({pending_count})"
+        if pending_count
+        else "📥 Новые предложения"
+    )
     rows = [
         [
-            cb_button("📥 Новые предложения", AdminCB(action="new_ideas")),
+            cb_button(pending_label, AdminCB(action="new_ideas")),
             cb_button("💡 Все идеи", AdminCB(action="ideas")),
         ],
         [
             cb_button("🏆 Лучшие идеи", AdminCB(action="top_ideas")),
+            cb_button("👁 Каталог идей", MenuCB(action="catalog")),
+        ],
+        [
             cb_button("👥 Пользователи", AdminCB(action="users")),
-        ],
-        [
             cb_button("⭐ Награды", AdminCB(action="rewards")),
-            cb_button("📊 Статистика", AdminCB(action="stats")),
         ],
         [
+            cb_button("📊 Статистика", AdminCB(action="stats")),
             cb_button("📢 Рассылка", AdminCB(action="broadcast")),
-            cb_button("⚙️ Настройки", AdminCB(action="settings")),
         ],
+        [
+            cb_button("🔍 Поиск", AdminCB(action="search")),
+            cb_button("📤 Экспорт идей", AdminCB(action="export")),
+        ],
+        [cb_button("⚙️ Настройки", AdminCB(action="settings"))],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -109,6 +116,24 @@ def admin_idea_actions_keyboard(
     )
     rows.append(third_row)
 
+    fourth_row = []
+    if idea.status in {IdeaStatus.REJECTED, IdeaStatus.HIDDEN}:
+        fourth_row.append(
+            cb_button(
+                "♻️ Вернуть в очередь",
+                AdminCB(action="restore", entity_id=idea.id, page=back_page, code=ctx),
+            )
+        )
+    fourth_row.append(
+        cb_button(
+            "🗑 Удалить",
+            AdminCB(
+                action="delete_idea", entity_id=idea.id, page=back_page, code=ctx
+            ),
+        )
+    )
+    rows.append(fourth_row)
+
     if queue_mode:
         rows.append(
             [cb_button("➡️ Следующее", AdminCB(action="next", entity_id=idea.id))]
@@ -121,10 +146,35 @@ def admin_idea_actions_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def reject_reasons_keyboard(
+def admin_delete_idea_keyboard(
     idea: Idea, *, queue_mode: bool = False, back_page: int = 0
 ) -> InlineKeyboardMarkup:
     ctx = "q" if queue_mode else "l"
+    rows = [
+        [
+            cb_button(
+                "✅ Удалить навсегда",
+                AdminCB(
+                    action="delete_confirm",
+                    entity_id=idea.id,
+                    page=back_page,
+                    code=ctx,
+                ),
+            )
+        ],
+        [
+            cb_button(
+                "❌ Отмена",
+                AdminCB(action="idea", entity_id=idea.id, page=back_page, code=ctx),
+            )
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def reject_reasons_keyboard(
+    idea: Idea, *, queue_mode: bool = False, back_page: int = 0
+) -> InlineKeyboardMarkup:
     rows: list[list] = []
     pair: list = []
     for code, label in REJECT_REASONS:
@@ -148,7 +198,12 @@ def reject_reasons_keyboard(
         [
             cb_button(
                 "🔙 Назад",
-                AdminCB(action="idea", entity_id=idea.id, page=back_page, code=ctx),
+                AdminCB(
+                    action="idea",
+                    entity_id=idea.id,
+                    page=back_page,
+                    code="q" if queue_mode else "l",
+                ),
             )
         ]
     )
@@ -256,10 +311,11 @@ def admin_users_list_keyboard(
             name = f"@{user.username}"
         else:
             name = user.first_name or f"ID {user.telegram_id}"
+        mark = "" if user.is_active else " 🚫"
         rows.append(
             [
                 cb_button(
-                    f"👤 {name}",
+                    f"👤 {name}{mark}",
                     AdminCB(action="user", entity_id=user.id, page=page),
                 )
             ]
@@ -276,9 +332,31 @@ def admin_users_list_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_user_card_keyboard(page: int) -> InlineKeyboardMarkup:
+def admin_user_card_keyboard(
+    user_id: int, *, is_active: bool, page: int
+) -> InlineKeyboardMarkup:
     rows = [
+        [
+            cb_button(
+                "💬 Написать",
+                AdminCB(action="reply_user", entity_id=user_id, page=page),
+            )
+        ],
+        [
+            cb_button(
+                "🚫 Заблокировать" if is_active else "✅ Разблокировать",
+                AdminCB(action="ban", entity_id=user_id, page=page),
+            )
+        ],
         [cb_button("🔙 К пользователям", AdminCB(action="users", page=page))],
+        [cb_button("🛠 Админ-панель", AdminCB(action="panel"))],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_contact_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    rows = [
+        [cb_button("💬 Ответить", AdminCB(action="reply_user", entity_id=user_id))],
         [cb_button("🛠 Админ-панель", AdminCB(action="panel"))],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -11,6 +11,7 @@ from app.keyboards import AdminCB, CategoryToggleCB, RejectApplyCB
 from app.keyboards.admin import (
     admin_back_keyboard,
     admin_cancel_keyboard,
+    admin_delete_idea_keyboard,
     admin_idea_actions_keyboard,
     admin_ideas_list_keyboard,
     category_keyboard,
@@ -64,6 +65,27 @@ async def _render_card(
         idea, reward_amount, queue_mode=queue_mode, back_page=back_page
     )
     await safe_edit(callback, text, markup)
+
+
+async def send_admin_idea_card(
+    message: Message,
+    session: AsyncSession,
+    idea,
+    *,
+    queue_mode: bool = False,
+    back_page: int = 0,
+    extra_note: str | None = None,
+) -> None:
+    reward_amount = await settings_service.get_int(session, "reward_amount", 15)
+    text = admin_idea_card_text(idea)
+    if extra_note:
+        text = f"{text}\n\n{extra_note}"
+    await message.answer(
+        text,
+        reply_markup=admin_idea_actions_keyboard(
+            idea, reward_amount, queue_mode=queue_mode, back_page=back_page
+        ),
+    )
 
 
 async def _render_ideas_list(
@@ -545,3 +567,85 @@ async def cb_category_toggle(
         ),
     )
     await callback.answer("Обновлено")
+
+
+@router.callback_query(AdminCB.filter(F.action == "restore"))
+async def cb_restore(
+    callback: CallbackQuery, callback_data: AdminCB, session: AsyncSession
+) -> None:
+    idea = await ideas_repo.get_by_id(session, callback_data.entity_id)
+    if idea is None:
+        await callback.answer("Идея не найдена.", show_alert=True)
+        return
+    admin_user = await users_service.get_current_user(session, callback.from_user)
+    await ideas_service.restore_idea(session, idea=idea, admin_user=admin_user)
+    await session.commit()
+    if idea.author is not None:
+        await notify_user(
+            callback.bot,
+            session,
+            idea.author.telegram_id,
+            (
+                f"♻️ Твоя идея #{idea.public_number} снова на рассмотрении."
+            ),
+        )
+    queue_mode, back_page = _context(callback_data)
+    await _render_card(
+        callback,
+        session,
+        idea,
+        queue_mode=queue_mode,
+        back_page=back_page,
+        extra_note="♻️ Идея возвращена в очередь на рассмотрение.",
+    )
+    await callback.answer("Идея возвращена в очередь")
+
+
+@router.callback_query(AdminCB.filter(F.action == "delete_idea"))
+async def cb_delete_idea_prompt(
+    callback: CallbackQuery, callback_data: AdminCB, session: AsyncSession
+) -> None:
+    idea = await ideas_repo.get_by_id(session, callback_data.entity_id)
+    if idea is None:
+        await callback.answer("Идея не найдена.", show_alert=True)
+        return
+    queue_mode, back_page = _context(callback_data)
+    await safe_edit(
+        callback,
+        (
+            f"🗑 Удалить идею #{idea.public_number} навсегда?\n\n"
+            "Запись будет удалена из базы вместе с лайками и наградами."
+        ),
+        admin_delete_idea_keyboard(
+            idea, queue_mode=queue_mode, back_page=back_page
+        ),
+    )
+    await callback.answer()
+
+
+@router.callback_query(AdminCB.filter(F.action == "delete_confirm"))
+async def cb_delete_idea_confirm(
+    callback: CallbackQuery, callback_data: AdminCB, session: AsyncSession
+) -> None:
+    idea = await ideas_repo.get_by_id(session, callback_data.entity_id)
+    if idea is None:
+        await callback.answer("Идея не найдена.", show_alert=True)
+        return
+    number = idea.public_number
+    author = idea.author
+    admin_user = await users_service.get_current_user(session, callback.from_user)
+    await ideas_service.delete_idea(session, idea=idea, admin_user=admin_user)
+    await session.commit()
+    if author is not None:
+        await notify_user(
+            callback.bot,
+            session,
+            author.telegram_id,
+            f"🗑 Твоё предложение #{number} удалено администратором.",
+        )
+    await safe_edit(
+        callback,
+        f"🗑 Идея #{number} удалена.",
+        admin_back_keyboard(),
+    )
+    await callback.answer("Идея удалена")

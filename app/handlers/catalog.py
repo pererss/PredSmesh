@@ -20,21 +20,21 @@ from app.repositories import ideas as ideas_repo
 from app.repositories import likes as likes_repo
 from app.services import ideas as ideas_service
 from app.services import users as users_service
-from app.utils.telegram import safe_edit
+from app.utils.telegram import IsAdmin, safe_edit
 from app.utils.text import catalog_idea_card_text
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="catalog")
+router.callback_query.filter(IsAdmin())
 
 PER_PAGE = 1
 HEADERS = {
     "new": "🆕 Новые идеи",
     "pop": "🔥 Популярные идеи",
-    "best": "🏆 Идеи с наибольшим количеством лайков",
     "rand": "🎲 Случайная идея",
 }
-ORDER_BY_LIKES = {"pop", "best"}
+ORDER_BY_LIKES = {"pop"}
 
 
 async def _mark_viewed_if_new(state: FSMContext, idea_id: int) -> bool:
@@ -106,23 +106,7 @@ async def cb_catalog(
     await callback.answer()
 
 
-@router.callback_query(MenuCB.filter(F.action == "best"))
-async def cb_best(
-    callback: CallbackQuery, session: AsyncSession, state: FSMContext
-) -> None:
-    idea = await _fetch_page(session, mode="best", page=0)
-    if idea is None:
-        await safe_edit(
-            callback, "Пока здесь нет опубликованных идей.", catalog_empty_keyboard()
-        )
-    else:
-        await _render_idea_card(
-            callback, session, state, idea, "best", 0, increment_views=True
-        )
-    await callback.answer()
-
-
-@router.callback_query(CatalogCB.filter(F.mode.in_({"new", "pop", "best"})))
+@router.callback_query(CatalogCB.filter(F.mode.in_({"new", "pop"})))
 async def cb_catalog_page(
     callback: CallbackQuery,
     callback_data: CatalogCB,

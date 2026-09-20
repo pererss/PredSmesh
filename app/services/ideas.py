@@ -21,6 +21,10 @@ class SubmissionsDisabledError(Exception):
     pass
 
 
+class IdeaActionError(Exception):
+    pass
+
+
 def validate_idea_text(text_value: str) -> str:
     cleaned = text_value.strip()
     if len(cleaned) < MIN_IDEA_TEXT_LENGTH:
@@ -101,3 +105,59 @@ async def toggle_like(session: AsyncSession, *, idea: Idea, user: User) -> tuple
 async def register_view(session: AsyncSession, *, idea: Idea) -> None:
     await ideas_repo.increment_views(session, idea.id)
     idea.views_count += 1
+
+
+async def update_idea_text(
+    session: AsyncSession, *, idea: Idea, user: User, text_value: str
+) -> Idea:
+    if idea.user_id != user.id:
+        raise IdeaActionError("Это не твоё предложение.")
+    if idea.status != IdeaStatus.PENDING:
+        raise IdeaActionError(
+            "Редактировать можно только предложения на рассмотрении."
+        )
+    idea.text = validate_idea_text(text_value)
+    await session.flush()
+    return idea
+
+
+async def withdraw_idea(session: AsyncSession, *, idea: Idea, user: User) -> None:
+    if idea.user_id != user.id:
+        raise IdeaActionError("Это не твоё предложение.")
+    if idea.status != IdeaStatus.PENDING:
+        raise IdeaActionError(
+            "Удалить можно только предложение на рассмотрении."
+        )
+    await session.delete(idea)
+    await session.flush()
+
+
+async def restore_idea(
+    session: AsyncSession, *, idea: Idea, admin_user: User
+) -> None:
+    idea.status = IdeaStatus.PENDING
+    idea.rejection_reason = None
+    idea.approved_at = None
+    idea.rewarded_at = None
+    await admin_log.log_action(
+        session,
+        admin_id=admin_user.id,
+        action="restore",
+        idea_id=idea.id,
+        target_user_id=idea.user_id,
+        details=f"Идея #{idea.public_number} возвращена в очередь на рассмотрение",
+    )
+    await session.flush()
+
+
+async def delete_idea(session: AsyncSession, *, idea: Idea, admin_user: User) -> None:
+    await admin_log.log_action(
+        session,
+        admin_id=admin_user.id,
+        action="delete_idea",
+        idea_id=None,
+        target_user_id=idea.user_id,
+        details=f"Идея #{idea.public_number} удалена администратором",
+    )
+    await session.delete(idea)
+    await session.flush()

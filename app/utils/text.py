@@ -26,11 +26,11 @@ HOW_IT_WORKS_TEXT = """❓ КАК ВСЁ РАБОТАЕТ
 
 2. Мы рассматриваем предложения.
 
-3. Интересные идеи попадают в каталог.
+3. Если идея подходит для реализации, мы связываемся с автором.
 
-4. Если идея подходит для реализации, мы связываемся с автором.
+4. За выбранную идею можно получить {reward} ⭐ Stars.
 
-5. За выбранную идею можно получить {reward} ⭐ Stars.
+🔒 Идеи видны только тебе и администрации — другие пользователи их не видят.
 
 💡 Идея не обязана быть полностью проработанной. Главное — чтобы в ней был интересный смысл или решение проблемы.
 
@@ -58,6 +58,14 @@ IDEA_CONFIRMATION_TEXT = """✅ ИДЕЯ ПОЛУЧЕНА!
 Если идея будет выбрана, мы свяжемся с тобой здесь и отправим {reward} ⭐ Stars.
 
 Номер предложения: #{number}"""
+
+CONTACT_PROMPT = """📩 НАПИСАТЬ АДМИНИСТРАЦИИ
+
+Опиши свой вопрос, отзыв или предложение одним сообщением.
+
+Ответ придёт сюда, в этот чат.
+
+📝 Напиши сообщение ниже."""
 
 STATUS_LABELS: dict[IdeaStatus, str] = {
     IdeaStatus.PENDING: "📥 На рассмотрении",
@@ -178,4 +186,25 @@ def catalog_idea_card_text(idea, *, header: str, author: User | None = None) -> 
         "",
         f"📅 {format_date(idea.created_at)}",
     ]
+    return "\n".join(lines)
+
+
+def my_idea_card_text(idea) -> str:
+    lines = [
+        f"💡 МОЁ ПРЕДЛОЖЕНИЕ #{idea.public_number}",
+        "",
+        f"«{escape_html(truncate(idea.text, 3500))}»",
+        "",
+        f"📊 Статус: {status_label(idea.status)}",
+        f"📅 Отправлено: {format_datetime(idea.created_at)}",
+    ]
+    if idea.approved_at is not None:
+        lines.append(f"✅ Одобрено: {format_datetime(idea.approved_at)}")
+    if idea.rewarded_at is not None:
+        lines.append(f"⭐ Награждено: {format_datetime(idea.rewarded_at)}")
+    if idea.rejection_reason:
+        lines += [
+            "",
+            f"❌ Причина отклонения: {escape_html(truncate(idea.rejection_reason, 500))}",
+        ]
     return "\n".join(lines)

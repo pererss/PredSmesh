@@ -23,6 +23,17 @@ class MyIdeasCB(CallbackData, prefix="my"):
     page: int = 0
 
 
+class MyIdeaCB(CallbackData, prefix="mi"):
+    idea_id: int
+    page: int = 0
+
+
+class MyIdeaActionCB(CallbackData, prefix="mia"):
+    action: str
+    idea_id: int
+    page: int = 0
+
+
 class AdminCB(CallbackData, prefix="adm"):
     action: str
     entity_id: int = 0

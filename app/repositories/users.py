@@ -19,6 +19,15 @@ async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
     return await session.get(User, user_id)
 
 
+async def get_by_username(session: AsyncSession, username: str) -> User | None:
+    normalized = username.lstrip("@").strip().lower()
+    if not normalized:
+        return None
+    return await session.scalar(
+        select(User).where(func.lower(User.username) == normalized)
+    )
+
+
 async def get_or_create(
     session: AsyncSession,
     *,
