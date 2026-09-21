@@ -53,10 +53,10 @@ async def cmd_admin(
 async def cb_panel(
     callback: CallbackQuery, session: AsyncSession, state: FSMContext
 ) -> None:
+    await callback.answer()
     await state.clear()
     text, markup = await render_panel(session)
     await safe_edit(callback, text, markup)
-    await callback.answer()
 
 
 @router.callback_query(AdminCB.filter(F.action == "stats"))

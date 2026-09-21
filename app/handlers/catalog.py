@@ -96,6 +96,7 @@ async def _render_idea_card(
 async def cb_catalog(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
+    await callback.answer()
     total = await ideas_repo.count_approved(session)
     text = (
         "🔎 ИДЕИ ПРОЕКТОВ\n\n"
@@ -103,7 +104,6 @@ async def cb_catalog(
         "Выбери раздел:"
     )
     await safe_edit(callback, text, catalog_modes_keyboard())
-    await callback.answer()
 
 
 @router.callback_query(CatalogCB.filter(F.mode.in_({"new", "pop"})))
@@ -113,6 +113,7 @@ async def cb_catalog_page(
     session: AsyncSession,
     state: FSMContext,
 ) -> None:
+    await callback.answer()
     total = await ideas_repo.count_approved(session)
     total_pages_count = max(1, ceil(total / PER_PAGE))
     page = min(max(callback_data.page, 0), total_pages_count - 1)
@@ -131,13 +132,13 @@ async def cb_catalog_page(
             page,
             increment_views=True,
         )
-    await callback.answer()
 
 
 @router.callback_query(CatalogCB.filter(F.mode == "rand"))
 async def cb_random(
     callback: CallbackQuery, session: AsyncSession, state: FSMContext
 ) -> None:
+    await callback.answer()
     idea = await ideas_repo.get_random_approved(session)
     if idea is None:
         await safe_edit(
@@ -147,7 +148,6 @@ async def cb_random(
         await _render_idea_card(
             callback, session, state, idea, "rand", 0, increment_views=True
         )
-    await callback.answer()
 
 
 @router.callback_query(LikeCB.filter())

@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,30 +37,30 @@ async def get_or_create(
     first_name: str | None,
     last_name: str | None,
 ) -> User:
-    user = await get_by_telegram_id(session, telegram_id)
-    if user is None:
-        user = User(
+    now = utcnow()
+    stmt = (
+        pg_insert(User)
+        .values(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
             last_name=last_name,
-            last_activity=utcnow(),
+            last_activity=now,
         )
-        session.add(user)
-        try:
-            async with session.begin_nested():
-                await session.flush()
-        except IntegrityError:
-            user = await get_by_telegram_id(session, telegram_id)
-            if user is None:
-                raise
-    user.username = username
-    user.first_name = first_name
-    user.last_name = last_name
-    user.last_activity = utcnow()
-    if not user.is_active:
-        user.is_active = True
-    return user
+        .on_conflict_do_update(
+            index_elements=[User.telegram_id],
+            set_={
+                "username": username,
+                "first_name": first_name,
+                "last_name": last_name,
+                "last_activity": now,
+                "updated_at": now,
+            },
+        )
+        .returning(User)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one()
 
 
 async def set_active(session: AsyncSession, user: User, is_active: bool) -> None:

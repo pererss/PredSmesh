@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from sqlalchemy import URL, func, make_url, update
+from sqlalchemy import URL, make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
-from app.database.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +62,8 @@ def get_engine() -> AsyncEngine:
         url, connect_args = build_async_url(settings.database_url)
         _engine = create_async_engine(
             url,
-            pool_size=5,
+            pool_size=10,
             max_overflow=10,
-            pool_pre_ping=True,
             pool_recycle=1800,
             connect_args=connect_args,
         )
@@ -104,24 +102,9 @@ class DatabaseSessionMiddleware(BaseMiddleware):
             data["session"] = session
             try:
                 result = await handler(event, data)
-                await self._touch_activity(session, event)
                 if session.in_transaction():
                     await session.commit()
                 return result
             except Exception:
                 await session.rollback()
                 raise
-
-    @staticmethod
-    async def _touch_activity(session: AsyncSession, event: TelegramObject) -> None:
-        from_user = getattr(event, "from_user", None)
-        if from_user is None:
-            return
-        try:
-            await session.execute(
-                update(User)
-                .where(User.telegram_id == from_user.id)
-                .values(last_activity=func.now())
-            )
-        except Exception:
-            logger.debug("Failed to update last activity", exc_info=True)

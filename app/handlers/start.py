@@ -106,14 +106,14 @@ async def cmd_my_ideas(message: Message, session: AsyncSession) -> None:
 async def cb_main_menu(
     callback: CallbackQuery, session: AsyncSession, state: FSMContext
 ) -> None:
+    await callback.answer()
     await state.clear()
     await safe_edit(callback, await render_main_menu_text(session), main_menu_keyboard())
-    await callback.answer()
 
 
 @router.callback_query(MenuCB.filter(F.action == "how"))
 async def cb_how_it_works(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
     await safe_edit(
         callback, await render_how_it_works_text(session), how_it_works_keyboard()
     )
-    await callback.answer()

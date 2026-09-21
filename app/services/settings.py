@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,31 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "reward_gift_id": "",
 }
 
+CACHE_TTL_SECONDS = 60.0
+
+_cache: dict[str, str] | None = None
+_cache_loaded_at = 0.0
+
+
+def invalidate_cache() -> None:
+    global _cache, _cache_loaded_at
+    _cache = None
+    _cache_loaded_at = 0.0
+
+
+async def get_all(session: AsyncSession) -> dict[str, str]:
+    global _cache, _cache_loaded_at
+    now = time.monotonic()
+    if _cache is not None and (now - _cache_loaded_at) < CACHE_TTL_SECONDS:
+        return dict(_cache)
+
+    rows = (await session.execute(select(Setting.key, Setting.value))).all()
+    values = dict(DEFAULT_SETTINGS)
+    values.update({key: value for key, value in rows})
+    _cache = values
+    _cache_loaded_at = now
+    return dict(values)
+
 
 async def ensure_defaults(
     session: AsyncSession, default_reward_amount: int = 15
@@ -26,20 +53,12 @@ async def ensure_defaults(
         .on_conflict_do_nothing(index_elements=["key"])
     )
     await session.execute(stmt)
-
-
-async def get_all(session: AsyncSession) -> dict[str, str]:
-    rows = (await session.execute(select(Setting.key, Setting.value))).all()
-    values = dict(DEFAULT_SETTINGS)
-    values.update({key: value for key, value in rows})
-    return values
+    invalidate_cache()
 
 
 async def get_value(session: AsyncSession, key: str, default: str = "") -> str:
-    value = await session.scalar(select(Setting.value).where(Setting.key == key))
-    if value is None:
-        return DEFAULT_SETTINGS.get(key, default)
-    return value
+    values = await get_all(session)
+    return values.get(key, DEFAULT_SETTINGS.get(key, default))
 
 
 async def get_int(session: AsyncSession, key: str, default: int) -> int:
@@ -62,3 +81,4 @@ async def set_value(session: AsyncSession, key: str, value: str) -> None:
         .on_conflict_do_update(index_elements=["key"], set_={"value": value})
     )
     await session.execute(stmt)
+    invalidate_cache()

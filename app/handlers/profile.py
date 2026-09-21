@@ -71,20 +71,20 @@ async def build_my_idea_card(
 
 @router.callback_query(MenuCB.filter(F.action == "myideas"))
 async def cb_my_ideas(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
     user = await users_service.get_current_user(session, callback.from_user)
     text, markup = await build_my_ideas_view(session, user, page=0)
     await safe_edit(callback, text, markup)
-    await callback.answer()
 
 
 @router.callback_query(MyIdeasCB.filter())
 async def cb_my_ideas_page(
     callback: CallbackQuery, callback_data: MyIdeasCB, session: AsyncSession
 ) -> None:
+    await callback.answer()
     user = await users_service.get_current_user(session, callback.from_user)
     text, markup = await build_my_ideas_view(session, user, page=callback_data.page)
     await safe_edit(callback, text, markup)
-    await callback.answer()
 
 
 @router.callback_query(MyIdeaCB.filter())
@@ -98,9 +98,9 @@ async def cb_open_my_idea(
     if card is None:
         await callback.answer("Предложение не найдено.", show_alert=True)
         return
+    await callback.answer()
     text, markup = card
     await safe_edit(callback, text, markup)
-    await callback.answer()
 
 
 @router.callback_query(MyIdeaActionCB.filter(F.action == "edit"))
